@@ -2,7 +2,7 @@
 This Powershell Module allows you to work with SMLets and Service Manager.  The functions are built so that an administrator can send in basic parameter values to get the same data you would get when using SMLets directly.
 
 ## Installation
-* Download and Install the SMLets PowerShell Module (https://smlets.codeplex.com/)
+* Download and Install the SMLets PowerShell Module (https://github.com/SMLets/SMLets)
 * Download the CiresonSCSMFunctions folder from this repository
 * Unblock the Zip File
 * Extract to "C:\Program Files\WindowsPowerShell\Modules"

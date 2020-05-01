@@ -10,7 +10,7 @@ This Powershell Module allows you to work with SMLets and Service Manager in a m
 ## Getting Started
 ```
 Import-Module SMLets
-Import-Module "C:\Program Files\WindowsPowerShell\Modules\CiresonPowerModule.psm1"
+Import-Module "C:\Program Files\WindowsPowerShell\Modules\CiresonSCSMFunctions.psm1"
 
 Get-CiresonWorkItem -WorkItemId "IR1234" -ComputerName $ComputerName
 ```

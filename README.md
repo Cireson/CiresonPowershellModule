@@ -1,5 +1,5 @@
 # Cireson-Powershell-Module
-This Powershell Module allows you to work with SMLets and Service Manager in a more user friendly way.  The functions are built so that an administrator can send in basic parameter values to get the same data you would get when using SMLets directly.
+This Powershell Module allows you to work with SMLets and Service Manager.  The functions are built so that an administrator can send in basic parameter values to get the same data you would get when using SMLets directly.
 
 ## Installation
 * Download and Install the SMLets PowerShell Module (https://smlets.codeplex.com/)

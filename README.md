@@ -3,9 +3,9 @@ This Powershell Module allows you to work with SMLets and Service Manager in a m
 
 ## Installation
 * Download and Install the SMLets PowerShell Module (https://smlets.codeplex.com/)
-* Download the Cireson PowerShell Module from this repository
+* Download the CiresonSCSMFunctions folder from this repository
 * Unblock the Zip File
-* Save the File to "C:\Program Files\WindowsPowerShell\Modules"
+* Extract to "C:\Program Files\WindowsPowerShell\Modules"
 
 ## Getting Started
 ```

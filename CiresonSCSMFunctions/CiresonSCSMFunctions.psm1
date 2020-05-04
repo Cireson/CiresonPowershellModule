@@ -75,6 +75,48 @@ Function Get-CiresonParentWI {
 
 <#
 .DESCRIPTION 
+Pass in the Runbook Activity GUID and determine the top most Work Item it belongs to.  This would typically be used as the first Runbook that is called from an SCSM Template.
+
+.PARAMETER RBAGuid
+Runbook Activity GUID
+
+.EXAMPLE
+Get-CiresonParentWIByGUID -RBAGuid "a08b464a-ab4e-4cbd-063f-1ae8bdcfdd6c" -ComputerName $ComputerName
+
+.OUTPUTS
+Work Item Object (Top Most Parent)
+
+#>
+Function Get-CiresonParentWIByGUID {
+    Param (
+        [guid]$RBAGuid,
+        [string]$ComputerName
+    )
+    
+    $SCSM = @{
+        ComputerName = $ComputerName
+    }
+
+    $ActivityObj = Get-SCSMObject -Id $RBAGuid @SCSM
+    Write-Host $ActivityObj
+    
+    $WIContainsActivityRel = '2da498be-0485-b2b2-d520-6ebd1698e61b'
+    $ParentWIRel = Get-SCSMRelationshipObject -ByTarget $ActivityObj @SCSM | Where-Object {$_.RelationshipId -eq $WIContainsActivityRel}
+    
+    $ParentWIObj = $ParentWIRel.SourceObject
+
+    # This is the top-level, so get the full object and return it
+    if($ParentWIObj.ClassName -eq 'System.WorkItem.ServiceRequest' -or $ParentWIObj.ClassName -eq 'System.WorkItem.ChangeRequest' -or $ParentWIObj.ClassName -eq 'System.WorkItem.ReleaseRecord'){
+        return Get-SCSMObject -Id $ParentWIObj.id.guid @SCSM
+    }
+    # This is not the top-level, and must be a PA or SA. Must now recurse
+    else{
+        Get-CiresonParentWIByGUID -RBAGuid $ParentWIObj.id.guid @SCSM
+    }
+}
+
+<#
+.DESCRIPTION 
 Pass in a Work Item and the Class of Configuration Item that you want to receive based on the Work Item About Config Item Relationship
 
 .PARAMETER CIClass

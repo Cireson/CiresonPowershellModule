@@ -22,6 +22,7 @@ Get-CiresonWorkItem -WorkItemId "IR1234" -ComputerName $ComputerName
 * Get-CiresonMAinWI
 * Get-CiresonNextAvailableSequenceID
 * Get-CiresonParentWI
+* Get-CiresonParentWIByGUID
 * Get-CiresonRAinWI
 * Get-CiresonRelatedCI
 * Get-CiresonUserManager

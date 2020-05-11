@@ -37,3 +37,4 @@ Get-CiresonWorkItem -WorkItemId "IR1234" -ComputerName $ComputerName
 * Set-CiresonAssignedUser
 * Set-CiresonUserAsReviewer
 * Set-CiresonWorkItemValue
+* Move-CiresonActivityInWorkItem

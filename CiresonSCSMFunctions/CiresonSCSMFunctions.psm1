@@ -897,3 +897,112 @@ Function New-CiresonReviewActivity {
 
     Return $ReviewActivity
 }
+
+<#
+.DESCRIPTION 
+Pass in an Activity Object and the Title of the Activity you want it Before or After.  Move the Activity and update subsequent Activities Sequence Ids.
+
+.PARAMETER Activity
+Activity Object
+
+.PARAMETER ActivityTitle
+The Title of an Activity that you want to find.
+
+.PARAMETER BeforeOrAfter
+Place the Activity 'Before' or 'After' the matching Activity Title.
+
+.EXAMPLE
+$SMObject = Get-CiresonWorkItem -WorkItemId "SR2250" -ComputerName $ComputerName
+$NewMA = New-CiresonManualActivity -ParentWorkItem $SMObject -Title "Test Activity" -Description "Testing" -ComputerName $ComputerName
+Move-CiresonActivityInWorkItem -Activity $NewMA -ActivityTitle "Access Availability" -BeforeOrAfter "After" -ComputerName $ComputerName
+
+.EXAMPLE
+$SMObject = Get-CiresonWorkItem -WorkItemId "RA1234" -ComputerName $ComputerName
+Move-CiresonActivityInWorkItem -Activity $SMObject -ActivityTitle "Access Availability" -BeforeOrAfter "Before" -ComputerName $ComputerName
+
+.OUTPUTS
+
+#>
+Function Move-CiresonActivityInWorkItem {
+    Param (
+        [Microsoft.EnterpriseManagement.Common.EnterpriseManagementObject]$Activity,
+        [string]$ActivityTitle,
+        [string]$BeforeOrAfter,
+        [string]$ComputerName
+    )
+    
+    $SCSM = @{
+        ComputerName = $ComputerName
+    }
+
+    $ParentWorkItem = Get-CiresonParentWI -Activity $Activity -ComputerName $ComputerName
+    
+    $RelWorkItemContainsActivity = Get-SCSMRelationshipClass System.WorkItemContainsActivity$ @SCSM
+
+    $Activities = Get-SCSMRelatedObject -SMObject $ParentWorkItem -Relationship $RelWorkItemContainsActivity @SCSM
+    $InvalidMove = $false
+    $Found = $false
+    foreach($Act in $Activities){
+        $CurrentTitle = $Act.Title
+        $CurrentSeqId = $Act.SequenceId
+        $CurrentStatus = $Act.Status.DisplayName
+
+        if ($CurrentTitle -eq $ActivityTitle -AND $BeforeOrAfter -eq "Before"){               
+            $Found = $true
+            if($CurrentStatus -eq "Pending"){
+                $NewSeqId = $CurrentSeqId
+                $InvalidMove = $false
+            }  
+            else {
+                $InvalidMove = $true
+            }
+
+            break;
+        }
+        elseif($CurrentTitle -eq $ActivityTitle -AND $BeforeOrAfter -eq "After"){
+            $Found = $true
+            if ($CurrentStatus -eq "In Progress" -OR $CurrentStatus -eq "Pending"){
+                $NewSeqId = $CurrentSeqId
+                $InvalidMove = $false
+            }
+            else {
+                $InvalidMove = $true
+            }
+
+            break;  
+        }
+
+    }
+    if ($Found -eq $true -AND $InvalidMove -eq $false) {
+        if ($BeforeOrAfter -eq "Before"){
+            foreach($Act in $Activities){
+                $CurrentSeqId = $Act.SequenceId               
+                if ($CurrentSeqId -ge $NewSeqId){
+                    $UpdatedSeqId = $CurrentSeqId + 1         
+                    Set-SCSMObject -SMObject $Act -Property SequenceId -Value $UpdatedSeqId @SCSM
+                }
+            }
+        Set-SCSMObject -SMObject $Activity -Property SequenceId -Value $NewSeqId @SCSM
+        }
+        elseif ($BeforeOrAfter -eq "After"){
+            $NewSeqId++
+            foreach($Act in $Activities){
+                $CurrentSeqId = $Act.SequenceId
+                if ($CurrentSeqId -ge $NewSeqId){
+                    $UpdatedSeqId = $CurrentSeqId + 1  
+                    Set-SCSMObject -SMObject $Act -Property SequenceId -Value $UpdatedSeqId @SCSM
+                }
+            }
+        Set-SCSMObject -SMObject $Activity -Property SequenceId -Value $NewSeqId @SCSM
+        }
+        else {
+            throw "The BeforeOrAfter variable did not contain a keyword of 'Before' or 'After'"
+        }
+    }
+    elseif ($InvalidMove -eq $true){
+        throw "The Activity Can Only Be Moved BEFORE an Activity that is Pending or AFTER an Activity that is In-Progress or Pending."
+    }
+    elseif ($Found -eq $false) {
+        throw "An Activity with a Title of $ActivityTitle was not found."
+    }
+}

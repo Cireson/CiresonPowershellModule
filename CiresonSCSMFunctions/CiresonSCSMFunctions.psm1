@@ -1006,3 +1006,195 @@ Function Move-CiresonActivityInWorkItem {
         throw "An Activity with a Title of $ActivityTitle was not found."
     }
 }
+
+<#
+.DESCRIPTION 
+Pass in an Work Item Object and the Title of a Template to Apply.
+
+.PARAMETER SMObject
+Work Item Object
+
+.PARAMETER TemplateDisplayName
+The Name of a Work Item Template to apply
+
+.EXAMPLE
+$NewCR = New-CiresonChangeRequest -Title "Update Company Website" @SCSM
+Set-CiresonWorkItemTemplate -SMObject $NewCR -TemplateDisplayName "Major Change Request" @SCSM
+
+.OUTPUTS
+
+#>
+Function Set-CiresonWorkItemTemplate {
+    Param (
+        $SMObject,
+        [string]$TemplateDisplayName,
+        [string]$ComputerName
+    )
+    
+    $SCSM = @{
+        ComputerName = $ComputerName
+    }
+    
+    #Function to get activity id prefix from the activity settings
+    Function Get-SCSMObjectPrefix
+        {
+        Param ([string]$ClassName =$(throw "Please provide a classname"))
+ 
+        #Get prefix from Activity Settings
+        If ($ClassName.StartsWith("System.WorkItem.Activity") -or $ClassName.Equals("Microsoft.SystemCenter.Orchestrator.RunbookAutomationActivity")) {
+
+            $ActivitySettingsObj = Get-SCSMObject -Class (Get-SCSMClass -Id "5e04a50d-01d1-6fce-7946-15580aa8681d" @SCSM) @SCSM
+ 
+            If ($ClassName.Equals("System.WorkItem.Activity.ReviewActivity")) {
+                $Prefix = $ActivitySettingsObj.SystemWorkItemActivityReviewActivityIdPrefix
+            }
+            If ($ClassName.Equals("System.WorkItem.Activity.ManualActivity")) {
+                $Prefix = $ActivitySettingsObj.SystemWorkItemActivityManualActivityIdPrefix
+            }
+            If ($ClassName.Equals("System.WorkItem.Activity.ParallelActivity")) {
+                $Prefix = $ActivitySettingsObj.SystemWorkItemActivityParallelActivityIdPrefix
+            }
+            If ($ClassName.Equals("System.WorkItem.Activity.SequentialActivity")) {
+                $Prefix = $ActivitySettingsObj.SystemWorkItemActivitySequentialActivityIdPrefix
+            }
+            If ($ClassName.Equals("System.WorkItem.Activity.DependentActivity")) {
+                $Prefix = $ActivitySettingsObj.SystemWorkItemActivityDependentActivityIdPrefix
+            }
+            If ($ClassName.Equals("Microsoft.SystemCenter.Orchestrator.RunbookAutomationActivity")) {
+                $Prefix = $ActivitySettingsObj.MicrosoftSystemCenterOrchestratorRunbookAutomationActivityBaseIdPrefix
+            }
+        }
+        Else {
+            Throw "Class Name $ClassName is not supported"
+        }
+        Return $Prefix
+    }
+
+    #Function to set id prefix to activities in template
+    Function Update-SCSMPropertyCollection {
+        Param (
+            [Microsoft.EnterpriseManagement.Configuration.ManagementPackObjectTemplateObject]$Object =$(throw "Please provide a valid template object"),
+            [bool]$ParentCollectionObject = $( throw "Please provide TRUE or FALSE for parent or child object" )
+        )
+
+        #Regex - Find class from template object property between ! and ']
+        $Pattern = '(?<=!)[^!]+?(?=''\])'
+        If (($Object.Path) -match $Pattern -and ($Matches[0].StartsWith("System.WorkItem.Activity") -or $Matches[0].StartsWith("Microsoft.SystemCenter.Orchestrator"))) {
+            #Set prefix from activity class
+            $Prefix = Get-SCSMObjectPrefix -ClassName $Matches[0]
+ 
+            #Create template property object
+            $PropClass = [Microsoft.EnterpriseManagement.Configuration.ManagementPackObjectTemplateProperty]
+            $PropIdObject = New-Object $PropClass
+ 
+            #Add new item to property object
+            $PropIdObject.Path = "`$Context/Property[Type='$WIAlias!System.WorkItem']/Id$"
+            $PropIdObject.MixedValue = "$Prefix{0}"
+ 
+            #Add property id to template
+            $Object.PropertyCollection.Add($PropIdObject)
+            
+			#Works through the child activities in the template and updates their sequence number to fall in line with the current object
+            If ($ParentCollectionObject) {
+                #Clear old values for recursive runs
+                $OldProp = $null
+                $NewProp = $null
+
+                #Look for the sequence ID property
+                ForEach ($Prop in $Object.PropertyCollection) {
+                    #Update the sequence id property when found
+                    If ($Prop.Path -match 'SequenceId') {
+
+                        #Get the existing sequence value
+                        [int]$OldSeq = $Prop.MixedValue
+
+                        #Set the new property information
+                        $Prop.MixedValue = ($OldSeq)
+
+                    }
+                }
+            }
+ 
+            #recursively update activities in activities
+            If ($Object.ObjectCollection.Count -ne 0) {
+                ForEach ($Obj in $Object.ObjectCollection) { 
+                    Update-SCSMPropertyCollection -Object $Obj -ParentCollectionObject $false
+                }
+            }
+        }
+    }
+
+    #Function to apply template after it has been updated
+    Function Set-SCSMTemplate {
+        Param (
+			[Microsoft.EnterpriseManagement.Common.EnterpriseManagementObjectProjection]$Projection =$(throw "Please provide a valid projection object"),
+			[Microsoft.EnterpriseManagement.Configuration.ManagementPackObjectTemplate]$Template = $(throw 'Please provide an template object, ex. -template template')
+		)
+ 
+        #Get alias from system.workitem.library managementpack to set id property
+        $TemplateMP = $Template.GetManagementPack()
+        $WIAlias = $TemplateMP.References.GetAlias((Get-SCSMManagementPack System.Workitem.Library @SCSM))
+ 
+        #Update Activities in template
+        ForEach ($TemplateObject in $Template.ObjectCollection) {
+            Update-SCSMPropertyCollection -Object $TemplateObject -ParentCollectionObject $true
+        }
+        #Apply update template
+        Set-SCSMObjectTemplate -Projection $Projection -Template $Template -ErrorAction Stop @SCSM
+    }
+ 
+    #INITIALIZE
+ 
+    #determine projection according to workitem type
+    Switch ($SMObject.GetLeastDerivedNonAbstractClass().Name) {
+        "System.WorkItem.Incident" {
+            $ProjName = "System.WorkItem.Incident.ProjectionType"
+        }
+        "System.WorkItem.ServiceRequest" {
+            $ProjName = "System.WorkItem.ServiceRequestProjection"
+        }
+        "System.WorkItem.ChangeRequest" {
+            $ProjName = "System.WorkItem.ChangeRequestProjection"
+        }
+        "System.WorkItem.Problem" {
+            $ProjName = "System.WorkItem.Problem.ProjectionType"
+        }
+        "System.WorkItem.ReleaseRecord" {
+            $ProjName = "System.WorkItem.ReleaseRecordProjection"
+        }
+        "System.WorkItem.Activity.SequentialActivity" {
+            $ProjName = "System.WorkItem.Activity.SequentialActivityProjection"
+        }
+        "System.WorkItem.Activity.ParallelActivity" {
+            $ProjName = "System.WorkItem.Activity.ParallelActivityProjection"
+        }
+        Default {
+            Throw "$Emo is not a supported workitem type"
+        }
+    }
+    
+    #Get object projection
+    $EmoID = $SMObject.Id
+    $WIproj = Get-SCSMObjectProjection -ProjectionName $ProjName -Filter "Id -eq $EmoID" @SCSM
+    
+    #Get template from displayname or id
+    If ($TemplateDisplayName) {
+        $Template = Get-SCSMObjectTemplate -DisplayName $TemplateDisplayName @SCSM
+    }
+    Else {
+        Throw "Please provide either a template displayname to apply"
+    }
+    
+    #Execute apply-template function if id and 1 template exists
+    If (@($Template).count -eq 1) {
+        If ($WIProj) {
+            Set-SCSMTemplate -Projection $WIproj -Template $Template
+        }
+        Else {
+            Throw "Id $Id cannot be found";
+        }
+    }
+    Else {
+        Throw "Template cannot be found or there was more than one result"
+    }
+}

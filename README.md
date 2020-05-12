@@ -27,12 +27,17 @@ Get-CiresonWorkItem -WorkItemId "IR1234" -ComputerName $ComputerName
 * Get-CiresonRelatedCI
 * Get-CiresonUserManager
 * Get-CiresonWorkItem
+* Get-CiresonBusinessServiceComponents
+* Get-CiresonBusiness ServiceOwner
+* Get-CiresonStandardContents
 * New-CiresonChangeRequest
 * New-CiresonIncident
 * New-CiresonServiceRequest
 * New-CiresonManualActivity
 * New-CiresonReviewActivity
 * New-CiresonParallelActivity
+* Add-CiresonRelatedCIToWI
+* Add-CiresonAboutCIToWI
 * Set-CiresonAffectedUser
 * Set-CiresonAssignedUser
 * Set-CiresonUserAsReviewer

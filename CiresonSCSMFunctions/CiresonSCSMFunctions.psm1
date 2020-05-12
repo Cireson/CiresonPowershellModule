@@ -1198,3 +1198,173 @@ Function Set-CiresonWorkItemTemplate {
         Throw "Template cannot be found or there was more than one result"
     }
 }
+
+<#
+.DESCRIPTION 
+Pass in an Work Item Object and Configuration Item Object and add it as the "Is Related to Configuration Item" Relationship.
+
+.PARAMETER SMObject
+Work Item Object
+
+.PARAMETER CIObject
+Configuration Item Object
+
+.EXAMPLE
+$SMObject = Get-CiresonWorkItem -WorkItemId "SR2229" -ComputerName $ComputerName
+$UserCI = Get-CiresonDomainUser -SAMAccountName "tim.ireland" -ComputerName $ComputerName
+Add-CiresonRelatedCIToWI -SMObject $SMObject -CIObject $UserCI -ComputerName $ComputerName
+
+.OUTPUTS
+
+#>
+Function Add-CiresonRelatedCIToWI {
+    Param (
+        [Microsoft.EnterpriseManagement.Common.EnterpriseManagementObject]$SMObject,
+        [Microsoft.EnterpriseManagement.Common.EnterpriseManagementObject]$CIObject,
+        [string]$ComputerName
+    )
+
+    $SCSM = @{
+        ComputerName = $ComputerName
+    }
+
+    $WorkItemRelatesToConfigItemRel = Get-SCSMRelationshipClass -Id d96c8b59-8554-6e77-0aa7-f51448868b43 @SCSM
+    $NewRel = New-SCSMRelationshipObject -Relationship $WorkItemRelatesToConfigItemRel -Source $SMObject -Target $CIObject -NoCommit @SCSM
+    $NewRel.Commit()
+
+}
+
+<#
+.DESCRIPTION 
+Pass in an Work Item Object and Configuration Item Object and add it as the "About Configuration Item" Relationship.
+
+.PARAMETER SMObject
+Work Item Object
+
+.PARAMETER CIObject
+Configuration Item Object
+
+.EXAMPLE
+$SMObject = Get-CiresonWorkItem -WorkItemId "SR2229" -ComputerName $ComputerName
+$UserCI = Get-CiresonDomainUser -SAMAccountName "tim.ireland" -ComputerName $ComputerName
+Add-CiresonAboutCIToWI -SMObject $SMObject -CIObject $UserCI -ComputerName $ComputerName
+
+.OUTPUTS
+
+#>
+Function Add-CiresonAboutCIToWI {
+    Param (
+        [Microsoft.EnterpriseManagement.Common.EnterpriseManagementObject]$SMObject,
+        [Microsoft.EnterpriseManagement.Common.EnterpriseManagementObject]$CIObject,
+        [string]$ComputerName
+    )
+
+    $SCSM = @{
+        ComputerName = $ComputerName
+    }
+
+    $WorkItemAboutConfigItemRel = Get-SCSMRelationshipClass -Id b73a6094-c64c-b0ff-9706-1822df5c2e82 @SCSM
+    $NewRel = New-SCSMRelationshipObject -Relationship $WorkItemAboutConfigItemRel -Source $SMObject -Target $CIObject -NoCommit @SCSM
+    $NewRel.Commit()
+
+}
+
+<#
+.DESCRIPTION 
+Pass in a Business Service Display Name and return the Components at the first level only. This only looks for Cireson Hardware Assets, Cireson Software Assets, or Windows Computer classes.
+
+.PARAMETER BSName
+Business Service Name
+
+.EXAMPLE
+Get-CiresonBusinessServiceComponents -BSName "STT Web App" -ComputerName $ComputerName
+
+.OUTPUTS
+Array of Configuration Items
+
+#>
+Function Get-CiresonBusinessServiceComponents {
+    Param (
+        [string]$BSName,
+        [string]$ComputerName
+    )
+
+    $SCSM = @{
+        ComputerName = $ComputerName
+    }
+
+    $BSClass = Get-SCSMClass System.Service$ @SCSM
+    $Service = Get-SCSMObject -Class $BSClass -Filter "DisplayName -eq $BSName" @SCSM
+
+    $BSComponents = $Service | Get-SCSMRelatedObject @SCSM -depth 1 |  Where-Object {$_.ClassName -eq 'Cireson.AssetManagement.HardwareAsset' -OR $_.ClassName -eq 'Cireson.AssetManagement.SoftwareAsset' -OR $_.ClassName -eq 'Microsoft.Windows.Computer'}
+
+    return $BSComponents
+}
+
+<#
+.DESCRIPTION 
+Pass in a Business Service Display Name and return the Service Owner.
+
+.PARAMETER BSName
+Business Service Name
+
+.EXAMPLE
+Get-CiresonBusinessServiceServiceOwner -BSName "STT Web App" -ComputerName $ComputerName
+
+.OUTPUTS
+Windows User Object
+
+#>
+Function Get-CiresonBusinessServiceOwner {
+    Param (
+        [string]$BSName,
+        [string]$ComputerName
+    )
+
+    $SCSM = @{
+        ComputerName = $ComputerName
+    }
+
+    $BSClass = Get-SCSMClass System.Service$ @SCSM
+    $Service = Get-SCSMObject -Class $BSClass -Filter "DisplayName -eq $BSName" @SCSM
+    $BSOwnedByRel = Get-SCSMRelationshipClass -Name System.ConfigItemOwnedByUser$ @SCSM
+    $OwnedByUser = Get-SCSMRelatedObject -Relationship $BSOwnedByRel -SMObject $Service @SCSM
+
+    return $OwnedByUser
+}
+
+<#
+.DESCRIPTION 
+Pass in a Standard Object and return all of the related CIs.
+
+.PARAMETER StandardObject
+Cireson Standard Object
+
+.EXAMPLE
+$SMObject = Get-CiresonWorkItem -WorkItemId "SR42" -ComputerName $ComputerName
+$Standard = Get-CiresonRelatedCI -SMObject $SMObject -CIClass "Cireson.AssetManagement.Standard" -ComputerName $ComputerName
+Get-CiresonStandardContents -StandardObject $Standard -ComputerName $ComputerName
+
+.OUTPUTS
+Array of Configuration Items
+
+#>
+Function Get-CiresonStandardContents {
+    Param (
+        [Microsoft.EnterpriseManagement.Common.EnterpriseManagementObject]$StandardObject,
+        [string]$ComputerName
+    )
+    
+    $SCSM = @{
+        ComputerName = $ComputerName
+    }
+
+    $StandardRelatedToCIRel = Get-SCSMRelationshipClass -name 'Cireson.AssetManagement.StandardRelatesToConfigItem' @SCSM
+    
+    #Get related standards
+    $RelatedCIs = Get-SCSMRelatedObject -SMObject $StandardObject -Relationship $StandardRelatedToCIRel @SCSM
+    $CIs = $RelatedCIs
+
+    Return $CIs
+
+}
